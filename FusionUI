@@ -859,28 +859,30 @@ function FusionUI.CreateTabSystem(parent)
     tabSystem.Name = "FusionTabSystem"
     tabSystem.Size = UDim2.new(1, 0, 1, 0)
     tabSystem.BackgroundTransparency = 1
-    
+
     local tabButtons = Instance.new("Frame")
     tabButtons.Name = "TabButtons"
     tabButtons.Size = UDim2.new(1, 0, 0, 40)
     tabButtons.BackgroundTransparency = 1
-    
+
     local tabContent = Instance.new("Frame")
     tabContent.Name = "TabContent"
     tabContent.Size = UDim2.new(1, 0, 1, -50)
     tabContent.Position = UDim2.new(0, 0, 0, 50)
     tabContent.BackgroundTransparency = 1
-    
+
     local tabs = {}
     local currentTab = nil
-    
-    function tabSystem.AddTab(name)
+
+    local tabApi = {}
+
+    function tabApi.AddTab(name)
         local tab = Instance.new("Frame")
         tab.Name = name .. "Tab"
         tab.Size = UDim2.new(1, 0, 1, 0)
         tab.BackgroundTransparency = 1
         tab.Visible = false
-        
+
         local tabButton = Instance.new("TextButton")
         tabButton.Name = name .. "Button"
         tabButton.Size = UDim2.new(0, 100, 0, 40)
@@ -890,9 +892,9 @@ function FusionUI.CreateTabSystem(parent)
         tabButton.TextColor3 = THEME.Text
         tabButton.TextSize = 14
         tabButton.Font = Enum.Font.GothamSemibold
-        
+
         createCorner(tabButton, 4)
-        
+
         tabButton.MouseButton1Click:Connect(function()
             if currentTab then
                 currentTab.Visible = false
@@ -901,23 +903,25 @@ function FusionUI.CreateTabSystem(parent)
             currentTab = tab
             tween(tabButton, {BackgroundColor3 = THEME.Accent})
         end)
-        
+
         tabButton.Parent = tabButtons
         tab.Parent = tabContent
         table.insert(tabs, {button = tabButton, content = tab})
-        
+
         if #tabs == 1 then
             tabButton.MouseButton1Click:Fire()
         end
-        
+
         return tab
     end
-    
+
     tabButtons.Parent = tabSystem
     tabContent.Parent = tabSystem
     tabSystem.Parent = parent
-    
-    return tabSystem
+
+    tabApi.Frame = tabSystem
+
+    return tabApi
 end
 
 -- Add new component: Search Bar
