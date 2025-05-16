@@ -1,0 +1,1446 @@
+local FusionUI = {}
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+-- Constants
+local THEME = {
+    Primary = Color3.fromRGB(32, 34, 37),
+    Secondary = Color3.fromRGB(47, 49, 54),
+    Tertiary = Color3.fromRGB(66, 70, 77),
+    Accent = Color3.fromRGB(88, 101, 242),
+    AccentHover = Color3.fromRGB(71, 82, 196),
+    Text = Color3.fromRGB(255, 255, 255),
+    TextSecondary = Color3.fromRGB(185, 187, 190),
+    Error = Color3.fromRGB(237, 66, 69),
+    Success = Color3.fromRGB(59, 165, 92),
+    Warning = Color3.fromRGB(250, 166, 26),
+    DarkAccent = Color3.fromRGB(54, 57, 63),
+    LightAccent = Color3.fromRGB(79, 84, 92),
+    Border = Color3.fromRGB(255, 255, 255, 0.1),
+    Shadow = Color3.fromRGB(0, 0, 0, 0.2),
+    BlurAmount = 20,
+    ShadowBlur = 20,
+    ShadowSize = 5
+}
+
+local ANIMATION_SETTINGS = {
+    Duration = 0.3,
+    EasingStyle = Enum.EasingStyle.Quad,
+    EasingDirection = Enum.EasingDirection.Out,
+    HoverDuration = 0.2,
+    ClickDuration = 0.1,
+    TransitionDuration = 0.4
+}
+
+-- Add these new animation presets
+local ANIMATION_PRESETS = {
+    Fade = {
+        In = function(instance)
+            instance.Visible = true
+            instance.BackgroundTransparency = 1
+            tween(instance, {BackgroundTransparency = 0}, 0.3)
+        end,
+        Out = function(instance)
+            tween(instance, {BackgroundTransparency = 1}, 0.3)
+            task.delay(0.3, function()
+                instance.Visible = false
+            end)
+        end
+    },
+    Slide = {
+        In = function(instance, direction)
+            local startPos = direction == "Left" and UDim2.new(-1, 0, 0, 0) or
+                           direction == "Right" and UDim2.new(1, 0, 0, 0) or
+                           direction == "Up" and UDim2.new(0, 0, -1, 0) or
+                           UDim2.new(0, 0, 1, 0)
+            instance.Position = startPos
+            instance.Visible = true
+            tween(instance, {Position = UDim2.new(0, 0, 0, 0)}, 0.3)
+        end,
+        Out = function(instance, direction)
+            local endPos = direction == "Left" and UDim2.new(-1, 0, 0, 0) or
+                          direction == "Right" and UDim2.new(1, 0, 0, 0) or
+                          direction == "Up" and UDim2.new(0, 0, -1, 0) or
+                          UDim2.new(0, 0, 1, 0)
+            tween(instance, {Position = endPos}, 0.3)
+            task.delay(0.3, function()
+                instance.Visible = false
+            end)
+        end
+    },
+    Scale = {
+        In = function(instance)
+            instance.Visible = true
+            instance.Scale = Vector3.new(0, 0, 0)
+            tween(instance, {Scale = Vector3.new(1, 1, 1)}, 0.3)
+        end,
+        Out = function(instance)
+            tween(instance, {Scale = Vector3.new(0, 0, 0)}, 0.3)
+            task.delay(0.3, function()
+                instance.Visible = false
+            end)
+        end
+    }
+}
+
+-- Utility Functions
+local function createCorner(instance, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 6)
+    corner.Parent = instance
+    return corner
+end
+
+local function createStroke(instance, color, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or THEME.Accent
+    stroke.Thickness = thickness or 1
+    stroke.Parent = instance
+    return stroke
+end
+
+local function createGradient(instance, colors)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = colors or {ColorSequenceKeypoint.new(0, THEME.Accent), ColorSequenceKeypoint.new(1, THEME.AccentHover)}
+    gradient.Parent = instance
+    return gradient
+end
+
+local function tween(instance, properties, duration)
+    local tweenInfo = TweenInfo.new(duration or ANIMATION_SETTINGS.Duration, 
+        ANIMATION_SETTINGS.EasingStyle, 
+        ANIMATION_SETTINGS.EasingDirection)
+    local tween = TweenService:Create(instance, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
+local function createShadow(instance)
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.Size = UDim2.new(1, THEME.ShadowSize * 2, 1, THEME.ShadowSize * 2)
+    shadow.Position = UDim2.new(0, -THEME.ShadowSize, 0, -THEME.ShadowSize)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://5554236805"
+    shadow.ImageColor3 = THEME.Shadow
+    shadow.ImageTransparency = 0.5
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+    shadow.ZIndex = -1
+    shadow.Parent = instance
+    return shadow
+end
+
+local function createBlur(instance)
+    local blur = Instance.new("BlurEffect")
+    blur.Name = "Blur"
+    blur.Size = THEME.BlurAmount
+    blur.Parent = instance
+    return blur
+end
+
+-- Create Window
+function FusionUI.CreateWindow(title, size)
+    local window = Instance.new("Frame")
+    window.Name = "FusionWindow"
+    window.Size = size or UDim2.new(0, 600, 0, 400)
+    window.Position = UDim2.new(0.5, -300, 0.5, -200)
+    window.BackgroundColor3 = THEME.Primary
+    window.Visible = false
+    
+    createCorner(window, 8)
+    createStroke(window, THEME.Tertiary, 1)
+    
+    -- Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = THEME.Secondary
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, -100, 1, 0)
+    titleText.Position = UDim2.new(0, 10, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = title
+    titleText.TextColor3 = THEME.Text
+    titleText.TextSize = 16
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Close Button
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -40, 0, 5)
+    closeButton.BackgroundColor3 = THEME.Tertiary
+    closeButton.Text = "×"
+    closeButton.TextColor3 = THEME.Text
+    closeButton.TextSize = 20
+    closeButton.Font = Enum.Font.GothamBold
+    
+    createCorner(closeButton, 4)
+    
+    -- Minimize Button
+    local minimizeButton = Instance.new("TextButton")
+    minimizeButton.Name = "MinimizeButton"
+    minimizeButton.Size = UDim2.new(0, 30, 0, 30)
+    minimizeButton.Position = UDim2.new(1, -80, 0, 5)
+    minimizeButton.BackgroundColor3 = THEME.Tertiary
+    minimizeButton.Text = "−"
+    minimizeButton.TextColor3 = THEME.Text
+    minimizeButton.TextSize = 20
+    minimizeButton.Font = Enum.Font.GothamBold
+    
+    createCorner(minimizeButton, 4)
+    
+    -- Content Container
+    local contentContainer = Instance.new("ScrollingFrame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Size = UDim2.new(1, -20, 1, -60)
+    contentContainer.Position = UDim2.new(0, 10, 0, 50)
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.BorderSizePixel = 0
+    contentContainer.ScrollBarThickness = 6
+    contentContainer.ScrollingDirection = Enum.ScrollingDirection.Y
+    contentContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    contentContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    
+    -- Make window draggable
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
+    
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = window.Position
+        end
+    end)
+    
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    titleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    
+    -- Button hover effects
+    local function setupButtonHover(button)
+        button.MouseEnter:Connect(function()
+            tween(button, {BackgroundColor3 = THEME.AccentHover})
+        end)
+        
+        button.MouseLeave:Connect(function()
+            tween(button, {BackgroundColor3 = THEME.Tertiary})
+        end)
+    end
+    
+    setupButtonHover(closeButton)
+    setupButtonHover(minimizeButton)
+    
+    -- Close button functionality
+    closeButton.MouseButton1Click:Connect(function()
+        window.Visible = false
+    end)
+    
+    -- Minimize button functionality
+    local minimized = false
+    minimizeButton.MouseButton1Click:Connect(function()
+        minimized = not minimized
+        if minimized then
+            tween(window, {Size = UDim2.new(0, 600, 0, 40)})
+            minimizeButton.Text = "+"
+        else
+            tween(window, {Size = UDim2.new(0, 600, 0, 400)})
+            minimizeButton.Text = "−"
+        end
+    end)
+    
+    titleText.Parent = titleBar
+    closeButton.Parent = titleBar
+    minimizeButton.Parent = titleBar
+    titleBar.Parent = window
+    contentContainer.Parent = window
+    
+    return window, contentContainer
+end
+
+-- Create Button
+function FusionUI.CreateButton(parent, text, callback, style)
+    style = style or {}
+    
+    local button = Instance.new("TextButton")
+    button.Name = "FusionButton"
+    button.Size = style.Size or UDim2.new(0, 200, 0, 40)
+    button.BackgroundColor3 = style.BackgroundColor or THEME.Accent
+    button.Text = text
+    button.TextColor3 = style.TextColor or THEME.Text
+    button.TextSize = style.TextSize or 14
+    button.Font = Enum.Font.GothamSemibold
+    
+    createCorner(button, style.CornerRadius or 6)
+    
+    if style.Gradient then
+        createGradient(button)
+    end
+    
+    if style.Stroke then
+        createStroke(button, style.StrokeColor, style.StrokeThickness)
+    end
+    
+    -- Hover effect
+    button.MouseEnter:Connect(function()
+        tween(button, {BackgroundColor3 = THEME.AccentHover})
+    end)
+    
+    button.MouseLeave:Connect(function()
+        tween(button, {BackgroundColor3 = style.BackgroundColor or THEME.Accent})
+    end)
+    
+    button.MouseButton1Click:Connect(callback)
+    button.Parent = parent
+    
+    return button
+end
+
+-- Create Toggle
+function FusionUI.CreateToggle(parent, text, default, callback)
+    local toggle = Instance.new("Frame")
+    toggle.Name = "FusionToggle"
+    toggle.Size = UDim2.new(0, 200, 0, 30)
+    toggle.BackgroundTransparency = 1
+    
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(0, 40, 0, 20)
+    toggleButton.Position = UDim2.new(0, 0, 0, 5)
+    toggleButton.BackgroundColor3 = THEME.Tertiary
+    toggleButton.Text = ""
+    
+    local toggleText = Instance.new("TextLabel")
+    toggleText.Name = "ToggleText"
+    toggleText.Size = UDim2.new(1, -50, 1, 0)
+    toggleText.Position = UDim2.new(0, 50, 0, 0)
+    toggleText.BackgroundTransparency = 1
+    toggleText.Text = text
+    toggleText.TextColor3 = THEME.Text
+    toggleText.TextSize = 14
+    toggleText.Font = Enum.Font.GothamSemibold
+    toggleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local toggleCircle = Instance.new("Frame")
+    toggleCircle.Name = "ToggleCircle"
+    toggleCircle.Size = UDim2.new(0, 16, 0, 16)
+    toggleCircle.Position = UDim2.new(0, 2, 0, 2)
+    toggleCircle.BackgroundColor3 = THEME.Text
+    toggleCircle.Parent = toggleButton
+    
+    createCorner(toggleButton, 10)
+    createCorner(toggleCircle, 8)
+    
+    local state = default
+    local function updateToggle()
+        if state then
+            tween(toggleCircle, {Position = UDim2.new(1, -18, 0, 2)})
+            tween(toggleButton, {BackgroundColor3 = THEME.Accent})
+        else
+            tween(toggleCircle, {Position = UDim2.new(0, 2, 0, 2)})
+            tween(toggleButton, {BackgroundColor3 = THEME.Tertiary})
+        end
+    end
+    
+    toggleButton.MouseButton1Click:Connect(function()
+        state = not state
+        updateToggle()
+        callback(state)
+    end)
+    
+    updateToggle()
+    
+    toggleButton.Parent = toggle
+    toggleText.Parent = toggle
+    toggle.Parent = parent
+    
+    return toggle
+end
+
+-- Create Slider
+function FusionUI.CreateSlider(parent, text, min, max, default, callback)
+    local slider = Instance.new("Frame")
+    slider.Name = "FusionSlider"
+    slider.Size = UDim2.new(0, 200, 0, 50)
+    slider.BackgroundTransparency = 1
+    
+    local sliderText = Instance.new("TextLabel")
+    sliderText.Name = "SliderText"
+    sliderText.Size = UDim2.new(1, 0, 0, 20)
+    sliderText.BackgroundTransparency = 1
+    sliderText.Text = text
+    sliderText.TextColor3 = THEME.Text
+    sliderText.TextSize = 14
+    sliderText.Font = Enum.Font.GothamSemibold
+    sliderText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Name = "SliderBar"
+    sliderBar.Size = UDim2.new(1, 0, 0, 4)
+    sliderBar.Position = UDim2.new(0, 0, 0, 25)
+    sliderBar.BackgroundColor3 = THEME.Tertiary
+    
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Name = "SliderFill"
+    sliderFill.Size = UDim2.new(0, 0, 1, 0)
+    sliderFill.BackgroundColor3 = THEME.Accent
+    
+    local sliderButton = Instance.new("TextButton")
+    sliderButton.Name = "SliderButton"
+    sliderButton.Size = UDim2.new(0, 20, 0, 20)
+    sliderButton.Position = UDim2.new(0, 0, 0, 20)
+    sliderButton.BackgroundColor3 = THEME.Accent
+    sliderButton.Text = ""
+    
+    createCorner(sliderBar, 2)
+    createCorner(sliderFill, 2)
+    createCorner(sliderButton, 10)
+    
+    local dragging = false
+    local function updateSlider(value)
+        local percent = (value - min) / (max - min)
+        tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)})
+        tween(sliderButton, {Position = UDim2.new(percent, -10, 0, 20)})
+        sliderText.Text = text .. ": " .. tostring(math.floor(value))
+    end
+    
+    sliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    sliderButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+            local percent = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+            local value = min + (max - min) * percent
+            updateSlider(value)
+            callback(value)
+        end
+    end)
+    
+    updateSlider(default)
+    
+    sliderFill.Parent = sliderBar
+    sliderBar.Parent = slider
+    sliderButton.Parent = slider
+    sliderText.Parent = slider
+    slider.Parent = parent
+    
+    return slider
+end
+
+-- Create Dropdown
+function FusionUI.CreateDropdown(parent, text, options, callback)
+    local dropdown = Instance.new("Frame")
+    dropdown.Name = "FusionDropdown"
+    dropdown.Size = UDim2.new(0, 200, 0, 40)
+    dropdown.BackgroundColor3 = THEME.Secondary
+    
+    local dropdownButton = Instance.new("TextButton")
+    dropdownButton.Name = "DropdownButton"
+    dropdownButton.Size = UDim2.new(1, 0, 1, 0)
+    dropdownButton.BackgroundTransparency = 1
+    dropdownButton.Text = text
+    dropdownButton.TextColor3 = THEME.Text
+    dropdownButton.TextSize = 14
+    dropdownButton.Font = Enum.Font.GothamSemibold
+    dropdownButton.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local dropdownArrow = Instance.new("TextLabel")
+    dropdownArrow.Name = "DropdownArrow"
+    dropdownArrow.Size = UDim2.new(0, 20, 1, 0)
+    dropdownArrow.Position = UDim2.new(1, -30, 0, 0)
+    dropdownArrow.BackgroundTransparency = 1
+    dropdownArrow.Text = "▼"
+    dropdownArrow.TextColor3 = THEME.Text
+    dropdownArrow.TextSize = 14
+    dropdownArrow.Font = Enum.Font.GothamSemibold
+    
+    local dropdownList = Instance.new("Frame")
+    dropdownList.Name = "DropdownList"
+    dropdownList.Size = UDim2.new(1, 0, 0, 0)
+    dropdownList.Position = UDim2.new(0, 0, 1, 5)
+    dropdownList.BackgroundColor3 = THEME.Secondary
+    dropdownList.Visible = false
+    
+    createCorner(dropdown, 6)
+    createCorner(dropdownList, 6)
+    
+    local expanded = false
+    local function updateDropdown()
+        expanded = not expanded
+        if expanded then
+            tween(dropdownList, {Size = UDim2.new(1, 0, 0, #options * 30)})
+            tween(dropdownArrow, {Rotation = 180})
+        else
+            tween(dropdownList, {Size = UDim2.new(1, 0, 0, 0)})
+            tween(dropdownArrow, {Rotation = 0})
+        end
+        dropdownList.Visible = expanded
+    end
+    
+    dropdownButton.MouseButton1Click:Connect(updateDropdown)
+    
+    for i, option in ipairs(options) do
+        local optionButton = Instance.new("TextButton")
+        optionButton.Name = "Option" .. i
+        optionButton.Size = UDim2.new(1, -10, 0, 25)
+        optionButton.Position = UDim2.new(0, 5, 0, (i-1) * 30 + 5)
+        optionButton.BackgroundColor3 = THEME.Tertiary
+        optionButton.Text = option
+        optionButton.TextColor3 = THEME.Text
+        optionButton.TextSize = 14
+        optionButton.Font = Enum.Font.GothamSemibold
+        
+        createCorner(optionButton, 4)
+        
+        optionButton.MouseButton1Click:Connect(function()
+            dropdownButton.Text = option
+            callback(option)
+            updateDropdown()
+        end)
+        
+        optionButton.Parent = dropdownList
+    end
+    
+    dropdownButton.Parent = dropdown
+    dropdownArrow.Parent = dropdown
+    dropdownList.Parent = dropdown
+    dropdown.Parent = parent
+    
+    return dropdown
+end
+
+-- Create TextBox
+function FusionUI.CreateTextBox(parent, placeholder, callback)
+    local textBox = Instance.new("Frame")
+    textBox.Name = "FusionTextBox"
+    textBox.Size = UDim2.new(0, 200, 0, 40)
+    textBox.BackgroundColor3 = THEME.Secondary
+    
+    local input = Instance.new("TextBox")
+    input.Name = "Input"
+    input.Size = UDim2.new(1, -20, 1, 0)
+    input.Position = UDim2.new(0, 10, 0, 0)
+    input.BackgroundTransparency = 1
+    input.PlaceholderText = placeholder
+    input.Text = ""
+    input.TextColor3 = THEME.Text
+    input.PlaceholderColor3 = THEME.TextSecondary
+    input.TextSize = 14
+    input.Font = Enum.Font.GothamSemibold
+    input.TextXAlignment = Enum.TextXAlignment.Left
+    
+    createCorner(textBox, 6)
+    
+    input.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            callback(input.Text)
+        end
+    end)
+    
+    input.Parent = textBox
+    textBox.Parent = parent
+    
+    return textBox
+end
+
+-- Add new component: Notification
+function FusionUI.CreateNotification(parent, title, message, type, duration)
+    type = type or "Info"
+    duration = duration or 5
+    
+    local notification = Instance.new("Frame")
+    notification.Name = "FusionNotification"
+    notification.Size = UDim2.new(0, 300, 0, 80)
+    notification.Position = UDim2.new(1, 320, 0, 20)
+    notification.BackgroundColor3 = THEME.Secondary
+    
+    local icon = Instance.new("TextLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 40, 0, 40)
+    icon.Position = UDim2.new(0, 10, 0, 20)
+    icon.BackgroundTransparency = 1
+    icon.Text = type == "Success" and "✓" or type == "Error" and "×" or type == "Warning" and "!" or "i"
+    icon.TextColor3 = type == "Success" and THEME.Success or type == "Error" and THEME.Error or type == "Warning" and THEME.Warning or THEME.Accent
+    icon.TextSize = 24
+    icon.Font = Enum.Font.GothamBold
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, -60, 0, 20)
+    titleText.Position = UDim2.new(0, 60, 0, 15)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = title
+    titleText.TextColor3 = THEME.Text
+    titleText.TextSize = 16
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local messageText = Instance.new("TextLabel")
+    messageText.Name = "Message"
+    messageText.Size = UDim2.new(1, -60, 0, 40)
+    messageText.Position = UDim2.new(0, 60, 0, 35)
+    messageText.BackgroundTransparency = 1
+    messageText.Text = message
+    messageText.TextColor3 = THEME.TextSecondary
+    messageText.TextSize = 14
+    messageText.Font = Enum.Font.GothamSemibold
+    messageText.TextXAlignment = Enum.TextXAlignment.Left
+    messageText.TextWrapped = true
+    
+    createCorner(notification, 8)
+    createShadow(notification)
+    
+    -- Animation
+    tween(notification, {Position = UDim2.new(1, -320, 0, 20)})
+    
+    -- Auto close
+    task.delay(duration, function()
+        tween(notification, {Position = UDim2.new(1, 320, 0, 20)})
+        task.delay(ANIMATION_SETTINGS.Duration, function()
+            notification:Destroy()
+        end)
+    end)
+    
+    icon.Parent = notification
+    titleText.Parent = notification
+    messageText.Parent = notification
+    notification.Parent = parent
+    
+    return notification
+end
+
+-- Add new component: Progress Bar
+function FusionUI.CreateProgressBar(parent, text, value, callback)
+    local progressBar = Instance.new("Frame")
+    progressBar.Name = "FusionProgressBar"
+    progressBar.Size = UDim2.new(0, 200, 0, 30)
+    progressBar.BackgroundTransparency = 1
+    
+    local progressText = Instance.new("TextLabel")
+    progressText.Name = "ProgressText"
+    progressText.Size = UDim2.new(1, 0, 0, 20)
+    progressText.BackgroundTransparency = 1
+    progressText.Text = text
+    progressText.TextColor3 = THEME.Text
+    progressText.TextSize = 14
+    progressText.Font = Enum.Font.GothamSemibold
+    progressText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local progressBackground = Instance.new("Frame")
+    progressBackground.Name = "ProgressBackground"
+    progressBackground.Size = UDim2.new(1, 0, 0, 6)
+    progressBackground.Position = UDim2.new(0, 0, 0, 24)
+    progressBackground.BackgroundColor3 = THEME.Tertiary
+    
+    local progressFill = Instance.new("Frame")
+    progressFill.Name = "ProgressFill"
+    progressFill.Size = UDim2.new(0, 0, 1, 0)
+    progressFill.BackgroundColor3 = THEME.Accent
+    
+    createCorner(progressBackground, 3)
+    createCorner(progressFill, 3)
+    
+    local function updateProgress(newValue)
+        value = math.clamp(newValue, 0, 100)
+        tween(progressFill, {Size = UDim2.new(value/100, 0, 1, 0)})
+        progressText.Text = text .. ": " .. tostring(math.floor(value)) .. "%"
+        if callback then callback(value) end
+    end
+    
+    updateProgress(value)
+    
+    progressFill.Parent = progressBackground
+    progressBackground.Parent = progressBar
+    progressText.Parent = progressBar
+    progressBar.Parent = parent
+    
+    return progressBar, updateProgress
+end
+
+-- Add new component: Color Picker
+function FusionUI.CreateColorPicker(parent, defaultColor, callback)
+    local colorPicker = Instance.new("Frame")
+    colorPicker.Name = "FusionColorPicker"
+    colorPicker.Size = UDim2.new(0, 200, 0, 200)
+    colorPicker.BackgroundColor3 = THEME.Secondary
+    
+    local colorWheel = Instance.new("ImageLabel")
+    colorWheel.Name = "ColorWheel"
+    colorWheel.Size = UDim2.new(1, -20, 1, -60)
+    colorWheel.Position = UDim2.new(0, 10, 0, 10)
+    colorWheel.BackgroundTransparency = 1
+    colorWheel.Image = "rbxassetid://6020301994"
+    
+    local colorPreview = Instance.new("Frame")
+    colorPreview.Name = "ColorPreview"
+    colorPreview.Size = UDim2.new(0, 40, 0, 40)
+    colorPreview.Position = UDim2.new(0, 10, 1, -50)
+    colorPreview.BackgroundColor3 = defaultColor or Color3.new(1, 1, 1)
+    
+    local hexInput = Instance.new("TextBox")
+    hexInput.Name = "HexInput"
+    hexInput.Size = UDim2.new(1, -60, 0, 30)
+    hexInput.Position = UDim2.new(0, 60, 1, -50)
+    hexInput.BackgroundColor3 = THEME.Tertiary
+    hexInput.Text = "#" .. tostring(defaultColor or Color3.new(1, 1, 1)):ToHex()
+    hexInput.TextColor3 = THEME.Text
+    hexInput.TextSize = 14
+    hexInput.Font = Enum.Font.GothamSemibold
+    
+    createCorner(colorPicker, 8)
+    createCorner(colorPreview, 4)
+    createCorner(hexInput, 4)
+    
+    local function updateColor(color)
+        colorPreview.BackgroundColor3 = color
+        hexInput.Text = "#" .. color:ToHex()
+        if callback then callback(color) end
+    end
+    
+    colorWheel.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local relativeX = (input.Position.X - colorWheel.AbsolutePosition.X) / colorWheel.AbsoluteSize.X
+            local relativeY = (input.Position.Y - colorWheel.AbsolutePosition.Y) / colorWheel.AbsoluteSize.Y
+            local color = Color3.fromHSV(relativeX, relativeY, 1)
+            updateColor(color)
+        end
+    end)
+    
+    hexInput.FocusLost:Connect(function()
+        local success, color = pcall(function()
+            return Color3.fromHex(hexInput.Text)
+        end)
+        if success then
+            updateColor(color)
+        else
+            hexInput.Text = "#" .. colorPreview.BackgroundColor3:ToHex()
+        end
+    end)
+    
+    colorWheel.Parent = colorPicker
+    colorPreview.Parent = colorPicker
+    hexInput.Parent = colorPicker
+    colorPicker.Parent = parent
+    
+    return colorPicker
+end
+
+-- Add new component: Keybind
+function FusionUI.CreateKeybind(parent, text, defaultKey, callback)
+    local keybind = Instance.new("Frame")
+    keybind.Name = "FusionKeybind"
+    keybind.Size = UDim2.new(0, 200, 0, 30)
+    keybind.BackgroundTransparency = 1
+    
+    local keybindText = Instance.new("TextLabel")
+    keybindText.Name = "KeybindText"
+    keybindText.Size = UDim2.new(1, -60, 1, 0)
+    keybindText.BackgroundTransparency = 1
+    keybindText.Text = text
+    keybindText.TextColor3 = THEME.Text
+    keybindText.TextSize = 14
+    keybindText.Font = Enum.Font.GothamSemibold
+    keybindText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local keyButton = Instance.new("TextButton")
+    keyButton.Name = "KeyButton"
+    keyButton.Size = UDim2.new(0, 50, 0, 30)
+    keyButton.Position = UDim2.new(1, -50, 0, 0)
+    keyButton.BackgroundColor3 = THEME.Secondary
+    keyButton.Text = defaultKey.Name
+    keyButton.TextColor3 = THEME.Text
+    keyButton.TextSize = 14
+    keyButton.Font = Enum.Font.GothamSemibold
+    
+    createCorner(keyButton, 4)
+    
+    local listening = false
+    local function updateKey(key)
+        keyButton.Text = key.Name
+        if callback then callback(key) end
+    end
+    
+    keyButton.MouseButton1Click:Connect(function()
+        listening = true
+        keyButton.Text = "..."
+        keyButton.BackgroundColor3 = THEME.Accent
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input)
+        if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+            listening = false
+            keyButton.BackgroundColor3 = THEME.Secondary
+            updateKey(input.KeyCode)
+        end
+    end)
+    
+    keybindText.Parent = keybind
+    keyButton.Parent = keybind
+    keybind.Parent = parent
+    
+    return keybind
+end
+
+-- Add new component: Tooltip
+function FusionUI.CreateTooltip(parent, text)
+    local tooltip = Instance.new("Frame")
+    tooltip.Name = "FusionTooltip"
+    tooltip.Size = UDim2.new(0, 200, 0, 40)
+    tooltip.BackgroundColor3 = THEME.Secondary
+    tooltip.Visible = false
+    
+    local tooltipText = Instance.new("TextLabel")
+    tooltipText.Name = "TooltipText"
+    tooltipText.Size = UDim2.new(1, -20, 1, 0)
+    tooltipText.Position = UDim2.new(0, 10, 0, 0)
+    tooltipText.BackgroundTransparency = 1
+    tooltipText.Text = text
+    tooltipText.TextColor3 = THEME.Text
+    tooltipText.TextSize = 14
+    tooltipText.Font = Enum.Font.GothamSemibold
+    tooltipText.TextWrapped = true
+    
+    createCorner(tooltip, 4)
+    
+    parent.MouseEnter:Connect(function()
+        tooltip.Visible = true
+        tooltip.Position = UDim2.new(0, 0, 1, 5)
+    end)
+    
+    parent.MouseLeave:Connect(function()
+        tooltip.Visible = false
+    end)
+    
+    tooltipText.Parent = tooltip
+    tooltip.Parent = parent
+    
+    return tooltip
+end
+
+-- Add new component: Tab System
+function FusionUI.CreateTabSystem(parent)
+    local tabSystem = Instance.new("Frame")
+    tabSystem.Name = "FusionTabSystem"
+    tabSystem.Size = UDim2.new(1, 0, 1, 0)
+    tabSystem.BackgroundTransparency = 1
+    
+    local tabButtons = Instance.new("Frame")
+    tabButtons.Name = "TabButtons"
+    tabButtons.Size = UDim2.new(1, 0, 0, 40)
+    tabButtons.BackgroundTransparency = 1
+    
+    local tabContent = Instance.new("Frame")
+    tabContent.Name = "TabContent"
+    tabContent.Size = UDim2.new(1, 0, 1, -50)
+    tabContent.Position = UDim2.new(0, 0, 0, 50)
+    tabContent.BackgroundTransparency = 1
+    
+    local tabs = {}
+    local currentTab = nil
+    
+    function tabSystem.AddTab(name)
+        local tab = Instance.new("Frame")
+        tab.Name = name .. "Tab"
+        tab.Size = UDim2.new(1, 0, 1, 0)
+        tab.BackgroundTransparency = 1
+        tab.Visible = false
+        
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = name .. "Button"
+        tabButton.Size = UDim2.new(0, 100, 0, 40)
+        tabButton.Position = UDim2.new(0, #tabs * 110, 0, 0)
+        tabButton.BackgroundColor3 = THEME.Secondary
+        tabButton.Text = name
+        tabButton.TextColor3 = THEME.Text
+        tabButton.TextSize = 14
+        tabButton.Font = Enum.Font.GothamSemibold
+        
+        createCorner(tabButton, 4)
+        
+        tabButton.MouseButton1Click:Connect(function()
+            if currentTab then
+                currentTab.Visible = false
+            end
+            tab.Visible = true
+            currentTab = tab
+            tween(tabButton, {BackgroundColor3 = THEME.Accent})
+        end)
+        
+        tabButton.Parent = tabButtons
+        tab.Parent = tabContent
+        table.insert(tabs, {button = tabButton, content = tab})
+        
+        if #tabs == 1 then
+            tabButton.MouseButton1Click:Fire()
+        end
+        
+        return tab
+    end
+    
+    tabButtons.Parent = tabSystem
+    tabContent.Parent = tabSystem
+    tabSystem.Parent = parent
+    
+    return tabSystem
+end
+
+-- Add new component: Search Bar
+function FusionUI.CreateSearchBar(parent, placeholder, callback)
+    local searchBar = Instance.new("Frame")
+    searchBar.Name = "FusionSearchBar"
+    searchBar.Size = UDim2.new(0, 200, 0, 40)
+    searchBar.BackgroundColor3 = THEME.Secondary
+    
+    local searchIcon = Instance.new("TextLabel")
+    searchIcon.Name = "SearchIcon"
+    searchIcon.Size = UDim2.new(0, 40, 1, 0)
+    searchIcon.BackgroundTransparency = 1
+    searchIcon.Text = "🔍"
+    searchIcon.TextColor3 = THEME.TextSecondary
+    searchIcon.TextSize = 16
+    
+    local searchInput = Instance.new("TextBox")
+    searchInput.Name = "SearchInput"
+    searchInput.Size = UDim2.new(1, -50, 1, 0)
+    searchInput.Position = UDim2.new(0, 40, 0, 0)
+    searchInput.BackgroundTransparency = 1
+    searchInput.PlaceholderText = placeholder
+    searchInput.Text = ""
+    searchInput.TextColor3 = THEME.Text
+    searchInput.PlaceholderColor3 = THEME.TextSecondary
+    searchInput.TextSize = 14
+    searchInput.Font = Enum.Font.GothamSemibold
+    searchInput.TextXAlignment = Enum.TextXAlignment.Left
+    
+    createCorner(searchBar, 6)
+    
+    searchInput.Changed:Connect(function(prop)
+        if prop == "Text" then
+            callback(searchInput.Text)
+        end
+    end)
+    
+    searchIcon.Parent = searchBar
+    searchInput.Parent = searchBar
+    searchBar.Parent = parent
+    
+    return searchBar
+end
+
+-- Add new component: Loading Spinner
+function FusionUI.CreateLoadingSpinner(parent, size)
+    local spinner = Instance.new("Frame")
+    spinner.Name = "FusionLoadingSpinner"
+    spinner.Size = UDim2.new(0, size or 40, 0, size or 40)
+    spinner.BackgroundTransparency = 1
+    
+    local circle = Instance.new("Frame")
+    circle.Name = "Circle"
+    circle.Size = UDim2.new(1, 0, 1, 0)
+    circle.BackgroundTransparency = 1
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = THEME.Accent
+    stroke.Thickness = 2
+    stroke.Parent = circle
+    
+    local rotation = 0
+    RunService.RenderStepped:Connect(function(deltaTime)
+        rotation = (rotation + deltaTime * 360) % 360
+        circle.Rotation = rotation
+    end)
+    
+    circle.Parent = spinner
+    spinner.Parent = parent
+    
+    return spinner
+end
+
+-- Add new component: Context Menu
+function FusionUI.CreateContextMenu(parent)
+    local contextMenu = Instance.new("Frame")
+    contextMenu.Name = "FusionContextMenu"
+    contextMenu.Size = UDim2.new(0, 200, 0, 0)
+    contextMenu.BackgroundColor3 = THEME.Secondary
+    contextMenu.Visible = false
+    
+    createCorner(contextMenu, 4)
+    createShadow(contextMenu)
+    
+    local items = {}
+    
+    function contextMenu.AddItem(text, callback)
+        local item = Instance.new("TextButton")
+        item.Name = text .. "Item"
+        item.Size = UDim2.new(1, 0, 0, 30)
+        item.Position = UDim2.new(0, 0, 0, #items * 30)
+        item.BackgroundColor3 = THEME.Secondary
+        item.Text = text
+        item.TextColor3 = THEME.Text
+        item.TextSize = 14
+        item.Font = Enum.Font.GothamSemibold
+        item.TextXAlignment = Enum.TextXAlignment.Left
+        
+        item.MouseButton1Click:Connect(function()
+            callback()
+            contextMenu.Visible = false
+        end)
+        
+        item.Parent = contextMenu
+        table.insert(items, item)
+        
+        contextMenu.Size = UDim2.new(0, 200, 0, #items * 30)
+    end
+    
+    parent.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            contextMenu.Position = UDim2.new(0, input.Position.X, 0, input.Position.Y)
+            contextMenu.Visible = true
+        end
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            contextMenu.Visible = false
+        end
+    end)
+    
+    contextMenu.Parent = parent
+    
+    return contextMenu
+end
+
+-- Add new component: Animated Button
+function FusionUI.CreateAnimatedButton(parent, text, callback, style)
+    style = style or {}
+    
+    local button = Instance.new("TextButton")
+    button.Name = "FusionAnimatedButton"
+    button.Size = style.Size or UDim2.new(0, 200, 0, 40)
+    button.BackgroundColor3 = style.BackgroundColor or THEME.Accent
+    button.Text = text
+    button.TextColor3 = style.TextColor or THEME.Text
+    button.TextSize = style.TextSize or 14
+    button.Font = Enum.Font.GothamSemibold
+    
+    -- Add ripple effect
+    local ripple = Instance.new("Frame")
+    ripple.Name = "Ripple"
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.BackgroundColor3 = Color3.new(1, 1, 1)
+    ripple.BackgroundTransparency = 0.5
+    ripple.Parent = button
+    
+    createCorner(button, style.CornerRadius or 6)
+    createCorner(ripple, 100)
+    
+    if style.Gradient then
+        createGradient(button)
+    end
+    
+    if style.Stroke then
+        createStroke(button, style.StrokeColor, style.StrokeThickness)
+    end
+    
+    -- Hover animation
+    button.MouseEnter:Connect(function()
+        tween(button, {
+            BackgroundColor3 = THEME.AccentHover,
+            Size = style.Size and style.Size + UDim2.new(0, 4, 0, 4) or UDim2.new(0, 204, 0, 44)
+        }, 0.2)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        tween(button, {
+            BackgroundColor3 = style.BackgroundColor or THEME.Accent,
+            Size = style.Size or UDim2.new(0, 200, 0, 40)
+        }, 0.2)
+    end)
+    
+    -- Click animation
+    button.MouseButton1Down:Connect(function()
+        tween(button, {Size = style.Size and style.Size - UDim2.new(0, 4, 0, 4) or UDim2.new(0, 196, 0, 36)}, 0.1)
+    end)
+    
+    button.MouseButton1Up:Connect(function()
+        tween(button, {Size = style.Size or UDim2.new(0, 200, 0, 40)}, 0.1)
+    end)
+    
+    -- Ripple effect
+    button.MouseButton1Down:Connect(function(x, y)
+        local relativeX = x - button.AbsolutePosition.X
+        local relativeY = y - button.AbsolutePosition.Y
+        
+        ripple.Position = UDim2.new(0, relativeX, 0, relativeY)
+        ripple.Size = UDim2.new(0, 0, 0, 0)
+        ripple.BackgroundTransparency = 0.5
+        
+        tween(ripple, {
+            Size = UDim2.new(2, 0, 2, 0),
+            BackgroundTransparency = 1
+        }, 0.5)
+    end)
+    
+    button.MouseButton1Click:Connect(callback)
+    button.Parent = parent
+    
+    return button
+end
+
+-- Add new component: Animated Toggle
+function FusionUI.CreateAnimatedToggle(parent, text, default, callback)
+    local toggle = Instance.new("Frame")
+    toggle.Name = "FusionAnimatedToggle"
+    toggle.Size = UDim2.new(0, 200, 0, 30)
+    toggle.BackgroundTransparency = 1
+    
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(0, 40, 0, 20)
+    toggleButton.Position = UDim2.new(0, 0, 0, 5)
+    toggleButton.BackgroundColor3 = THEME.Tertiary
+    toggleButton.Text = ""
+    
+    local toggleText = Instance.new("TextLabel")
+    toggleText.Name = "ToggleText"
+    toggleText.Size = UDim2.new(1, -50, 1, 0)
+    toggleText.Position = UDim2.new(0, 50, 0, 0)
+    toggleText.BackgroundTransparency = 1
+    toggleText.Text = text
+    toggleText.TextColor3 = THEME.Text
+    toggleText.TextSize = 14
+    toggleText.Font = Enum.Font.GothamSemibold
+    toggleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local toggleCircle = Instance.new("Frame")
+    toggleCircle.Name = "ToggleCircle"
+    toggleCircle.Size = UDim2.new(0, 16, 0, 16)
+    toggleCircle.Position = UDim2.new(0, 2, 0, 2)
+    toggleCircle.BackgroundColor3 = THEME.Text
+    toggleCircle.Parent = toggleButton
+    
+    createCorner(toggleButton, 10)
+    createCorner(toggleCircle, 8)
+    
+    local state = default
+    local function updateToggle()
+        if state then
+            tween(toggleCircle, {Position = UDim2.new(1, -18, 0, 2)}, 0.3)
+            tween(toggleButton, {BackgroundColor3 = THEME.Accent}, 0.3)
+            tween(toggleCircle, {BackgroundColor3 = THEME.Text}, 0.3)
+        else
+            tween(toggleCircle, {Position = UDim2.new(0, 2, 0, 2)}, 0.3)
+            tween(toggleButton, {BackgroundColor3 = THEME.Tertiary}, 0.3)
+            tween(toggleCircle, {BackgroundColor3 = THEME.Text}, 0.3)
+        end
+    end
+    
+    toggleButton.MouseButton1Click:Connect(function()
+        state = not state
+        updateToggle()
+        callback(state)
+    end)
+    
+    updateToggle()
+    
+    toggleButton.Parent = toggle
+    toggleText.Parent = toggle
+    toggle.Parent = parent
+    
+    return toggle
+end
+
+-- Add new component: Animated Slider
+function FusionUI.CreateAnimatedSlider(parent, text, min, max, default, callback)
+    local slider = Instance.new("Frame")
+    slider.Name = "FusionAnimatedSlider"
+    slider.Size = UDim2.new(0, 200, 0, 50)
+    slider.BackgroundTransparency = 1
+    
+    local sliderText = Instance.new("TextLabel")
+    sliderText.Name = "SliderText"
+    sliderText.Size = UDim2.new(1, 0, 0, 20)
+    sliderText.BackgroundTransparency = 1
+    sliderText.Text = text
+    sliderText.TextColor3 = THEME.Text
+    sliderText.TextSize = 14
+    sliderText.Font = Enum.Font.GothamSemibold
+    sliderText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Name = "SliderBar"
+    sliderBar.Size = UDim2.new(1, 0, 0, 4)
+    sliderBar.Position = UDim2.new(0, 0, 0, 25)
+    sliderBar.BackgroundColor3 = THEME.Tertiary
+    
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Name = "SliderFill"
+    sliderFill.Size = UDim2.new(0, 0, 1, 0)
+    sliderFill.BackgroundColor3 = THEME.Accent
+    
+    local sliderButton = Instance.new("TextButton")
+    sliderButton.Name = "SliderButton"
+    sliderButton.Size = UDim2.new(0, 20, 0, 20)
+    sliderButton.Position = UDim2.new(0, 0, 0, 20)
+    sliderButton.BackgroundColor3 = THEME.Accent
+    sliderButton.Text = ""
+    
+    createCorner(sliderBar, 2)
+    createCorner(sliderFill, 2)
+    createCorner(sliderButton, 10)
+    
+    -- Add glow effect
+    local glow = Instance.new("ImageLabel")
+    glow.Name = "Glow"
+    glow.Size = UDim2.new(1, 20, 1, 20)
+    glow.Position = UDim2.new(0, -10, 0, -10)
+    glow.BackgroundTransparency = 1
+    glow.Image = "rbxassetid://4996891970"
+    glow.ImageColor3 = THEME.Accent
+    glow.ImageTransparency = 0.8
+    glow.ZIndex = -1
+    glow.Parent = sliderButton
+    
+    local dragging = false
+    local function updateSlider(value)
+        value = math.clamp(value, min, max)
+        local percent = (value - min) / (max - min)
+        
+        tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
+        tween(sliderButton, {Position = UDim2.new(percent, -10, 0, 20)}, 0.1)
+        tween(glow, {ImageTransparency = 0.8 - (percent * 0.3)}, 0.1)
+        
+        sliderText.Text = text .. ": " .. tostring(math.floor(value))
+        if callback then callback(value) end
+    end
+    
+    sliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            tween(sliderButton, {Size = UDim2.new(0, 24, 0, 24)}, 0.1)
+        end
+    end)
+    
+    sliderButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+            tween(sliderButton, {Size = UDim2.new(0, 20, 0, 20)}, 0.1)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+            local percent = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+            local value = min + (max - min) * percent
+            updateSlider(value)
+        end
+    end)
+    
+    updateSlider(default)
+    
+    sliderFill.Parent = sliderBar
+    sliderBar.Parent = slider
+    sliderButton.Parent = slider
+    sliderText.Parent = slider
+    slider.Parent = parent
+    
+    return slider
+end
+
+-- Add new component: Animated Dropdown
+function FusionUI.CreateAnimatedDropdown(parent, text, options, callback)
+    local dropdown = Instance.new("Frame")
+    dropdown.Name = "FusionAnimatedDropdown"
+    dropdown.Size = UDim2.new(0, 200, 0, 40)
+    dropdown.BackgroundColor3 = THEME.Secondary
+    
+    local dropdownButton = Instance.new("TextButton")
+    dropdownButton.Name = "DropdownButton"
+    dropdownButton.Size = UDim2.new(1, 0, 1, 0)
+    dropdownButton.BackgroundTransparency = 1
+    dropdownButton.Text = text
+    dropdownButton.TextColor3 = THEME.Text
+    dropdownButton.TextSize = 14
+    dropdownButton.Font = Enum.Font.GothamSemibold
+    dropdownButton.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local dropdownArrow = Instance.new("TextLabel")
+    dropdownArrow.Name = "DropdownArrow"
+    dropdownArrow.Size = UDim2.new(0, 20, 1, 0)
+    dropdownArrow.Position = UDim2.new(1, -30, 0, 0)
+    dropdownArrow.BackgroundTransparency = 1
+    dropdownArrow.Text = "▼"
+    dropdownArrow.TextColor3 = THEME.Text
+    dropdownArrow.TextSize = 14
+    dropdownArrow.Font = Enum.Font.GothamSemibold
+    
+    local dropdownList = Instance.new("Frame")
+    dropdownList.Name = "DropdownList"
+    dropdownList.Size = UDim2.new(1, 0, 0, 0)
+    dropdownList.Position = UDim2.new(0, 0, 1, 5)
+    dropdownList.BackgroundColor3 = THEME.Secondary
+    dropdownList.Visible = false
+    
+    createCorner(dropdown, 6)
+    createCorner(dropdownList, 6)
+    
+    local expanded = false
+    local function updateDropdown()
+        expanded = not expanded
+        if expanded then
+            dropdownList.Visible = true
+            tween(dropdownList, {Size = UDim2.new(1, 0, 0, #options * 30)}, 0.3)
+            tween(dropdownArrow, {Rotation = 180}, 0.3)
+        else
+            tween(dropdownList, {Size = UDim2.new(1, 0, 0, 0)}, 0.3)
+            tween(dropdownArrow, {Rotation = 0}, 0.3)
+            task.delay(0.3, function()
+                dropdownList.Visible = false
+            end)
+        end
+    end
+    
+    dropdownButton.MouseButton1Click:Connect(updateDropdown)
+    
+    for i, option in ipairs(options) do
+        local optionButton = Instance.new("TextButton")
+        optionButton.Name = "Option" .. i
+        optionButton.Size = UDim2.new(1, -10, 0, 25)
+        optionButton.Position = UDim2.new(0, 5, 0, (i-1) * 30 + 5)
+        optionButton.BackgroundColor3 = THEME.Tertiary
+        optionButton.Text = option
+        optionButton.TextColor3 = THEME.Text
+        optionButton.TextSize = 14
+        optionButton.Font = Enum.Font.GothamSemibold
+        
+        createCorner(optionButton, 4)
+        
+        -- Hover animation
+        optionButton.MouseEnter:Connect(function()
+            tween(optionButton, {BackgroundColor3 = THEME.Accent}, 0.2)
+        end)
+        
+        optionButton.MouseLeave:Connect(function()
+            tween(optionButton, {BackgroundColor3 = THEME.Tertiary}, 0.2)
+        end)
+        
+        optionButton.MouseButton1Click:Connect(function()
+            dropdownButton.Text = option
+            callback(option)
+            updateDropdown()
+        end)
+        
+        optionButton.Parent = dropdownList
+    end
+    
+    dropdownButton.Parent = dropdown
+    dropdownArrow.Parent = dropdown
+    dropdownList.Parent = dropdown
+    dropdown.Parent = parent
+    
+    return dropdown
+end
+
+-- Add new component: Animated Notification
+function FusionUI.CreateAnimatedNotification(parent, title, message, type, duration)
+    type = type or "Info"
+    duration = duration or 5
+    
+    local notification = Instance.new("Frame")
+    notification.Name = "FusionAnimatedNotification"
+    notification.Size = UDim2.new(0, 300, 0, 80)
+    notification.Position = UDim2.new(1, 320, 0, 20)
+    notification.BackgroundColor3 = THEME.Secondary
+    
+    local icon = Instance.new("TextLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 40, 0, 40)
+    icon.Position = UDim2.new(0, 10, 0, 20)
+    icon.BackgroundTransparency = 1
+    icon.Text = type == "Success" and "✓" or type == "Error" and "×" or type == "Warning" and "!" or "i"
+    icon.TextColor3 = type == "Success" and THEME.Success or type == "Error" and THEME.Error or type == "Warning" and THEME.Warning or THEME.Accent
+    icon.TextSize = 24
+    icon.Font = Enum.Font.GothamBold
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, -60, 0, 20)
+    titleText.Position = UDim2.new(0, 60, 0, 15)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = title
+    titleText.TextColor3 = THEME.Text
+    titleText.TextSize = 16
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local messageText = Instance.new("TextLabel")
+    messageText.Name = "Message"
+    messageText.Size = UDim2.new(1, -60, 0, 40)
+    messageText.Position = UDim2.new(0, 60, 0, 35)
+    messageText.BackgroundTransparency = 1
+    messageText.Text = message
+    messageText.TextColor3 = THEME.TextSecondary
+    messageText.TextSize = 14
+    messageText.Font = Enum.Font.GothamSemibold
+    messageText.TextXAlignment = Enum.TextXAlignment.Left
+    messageText.TextWrapped = true
+    
+    createCorner(notification, 8)
+    createShadow(notification)
+    
+    -- Slide in animation
+    tween(notification, {Position = UDim2.new(1, -320, 0, 20)}, 0.5)
+    
+    -- Auto close with slide out animation
+    task.delay(duration, function()
+        tween(notification, {Position = UDim2.new(1, 320, 0, 20)}, 0.5)
+        task.delay(0.5, function()
+            notification:Destroy()
+        end)
+    end)
+    
+    icon.Parent = notification
+    titleText.Parent = notification
+    messageText.Parent = notification
+    notification.Parent = parent
+    
+    return notification
+end
+
+return FusionUI 
